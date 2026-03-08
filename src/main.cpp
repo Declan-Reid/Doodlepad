@@ -79,7 +79,7 @@ void drawHud(bool show_pen_thickness) {
 void drawHud() { drawHud(false); }
 
 int main() {
-  struct __attribute__((aligned(4))) Input_Event event;
+  struct Input_Event event __attribute__((aligned(4)));
   unsigned int screen_width_u, screen_height_u;
   LCD_GetSize(&screen_width_u, &screen_height_u);
   screen_width = screen_width_u;
