@@ -1,9 +1,9 @@
 #include "sys/_stdint.h"
-#include <appdef.hpp>
-#include <sdk/calc/calc.hpp>
-#include <sdk/os/debug.hpp>
-#include <sdk/os/input.hpp>
-#include <sdk/os/lcd.hpp>
+#include <appdef.h>
+#include <sdk/calc/calc.h>
+#include <sdk/os/debug.h>
+#include <sdk/os/input.h>
+#include <sdk/os/lcd.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -72,14 +72,13 @@ void drawHud(bool show_pen_thickness) {
 
   // Display pen thickness
   if (show_pen_thickness) {
-    Debug_Printf(0, 0, false, 0, "Pen Thickness: %d", pen_thickness);
+    Debug_Printf(0, 0, false, 0, "Pen Thickness: %d", static_cast<int>(pen_thickness));
   }
 }
 
 void drawHud() { drawHud(false); }
 
-extern "C" void main() {
-  calcInit(); // backup screen and init some variables
+int main() {
   LCD_GetSize(&screen_width, &screen_height);
 
   LCD_ClearScreen();
@@ -87,28 +86,27 @@ extern "C" void main() {
 
   LCD_Refresh();
 
-  struct InputEvent event;
+  struct __attribute__((aligned(4))) Input_Event event;
   int old_p1_x, old_p1_y;
 
   old_p1_x = 0;
   old_p1_y = 0;
 
   while (true) {
-    uint32_t key1, key2;  // First create variables
-    getKey(&key1, &key2); // then read the keys
-
-    if (testKey(
-            key1, key2,
-            KEY_CLEAR)) { // Use testKey() to test if a specific key is pressed
-      break;
-    }
-    if (testKey(key1, key2, KEY_BACKSPACE)) {
-      LCD_ClearScreen();
-      drawHud();
-      LCD_Refresh();
+    if (GetInput(&event, 0xFFFFFFFF, 0x10) < 0) {
+      continue;
     }
 
-    GetInput(&event, 0xFFFFFFFF, 0x10);
+    if (event.type == EVENT_KEY && event.data.key.pressed) {
+      if (event.data.key.keycode == KEYCODE_POWER_CLEAR) {
+        break;
+      }
+      if (event.data.key.keycode == KEYCODE_BACKSPACE) {
+        LCD_ClearScreen();
+        drawHud();
+        LCD_Refresh();
+      }
+    }
 
     switch (event.type) {
     case EVENT_TOUCH:
@@ -174,5 +172,5 @@ extern "C" void main() {
     }
   }
 
-  calcEnd(); // restore screen and do stuff
+  return 0;
 }

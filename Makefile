@@ -1,33 +1,36 @@
-# run `make all` to compile the .hhk and .bin file, use `make` to compile only the .bin file.
-# The .hhk file is the original format, the bin file is a newer format.
-APP_NAME:=Doodlepad
-
-ifndef SDK_DIR
-$(error You need to define the SDK_DIR environment variable, and point it to the sdk/ folder)
-endif
-
-AS:=sh4aeb-elf-gcc
-AS_FLAGS:=-DAPPNAME_STRING=\"$(APP_NAME)\"
-
-COMMON_FLAGS:=-flto -ffunction-sections -fdata-sections -ffreestanding -fshort-wchar -O2 -m4a-nofpu -DAPPNAME_STRING=\"$(APP_NAME)\"
-INCLUDES:=-I $(SDK_DIR)/include/
-WARNINGS:=-Wall -Wextra
-
-CC:=sh4aeb-elf-gcc
-CC_FLAGS:=$(COMMON_FLAGS) $(INCLUDES) $(WARNINGS)
-
-CXX:=sh4aeb-elf-g++
-CXX_FLAGS:=-fno-exceptions -fno-rtti -Wno-write-strings $(COMMON_FLAGS) $(INCLUDES) $(WARNINGS)
-
-LD:=sh4aeb-elf-g++
-LD_FLAGS:=-m4a-nofpu -Wl,--gc-sections -Wno-undef
-
-READELF:=sh4aeb-elf-readelf
-OBJCOPY:=sh4aeb-elf-objcopy
-
 SOURCEDIR = src
 BUILDDIR = obj
 OUTDIR = dist
+DEPDIR = .deps
+
+AS:=sh4a_nofpueb-elf-gcc
+AS_FLAGS:=-gdwarf-5
+
+SDK_DIR?=/sdk
+
+DEPFLAGS=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
+WARNINGS=-Wall -Wextra -pedantic -Werror -pedantic-errors
+INCLUDES=-I$(SDK_DIR)/include #-I$(SOURCEDIR)
+DEFINES=
+FUNCTION_FLAGS=-flto=auto -ffat-lto-objects -fno-builtin -ffunction-sections -fdata-sections -gdwarf-5 -O2
+COMMON_FLAGS=$(FUNCTION_FLAGS) $(INCLUDES) $(WARNINGS) $(DEFINES)
+
+CC:=sh4a_nofpueb-elf-gcc
+CC_FLAGS=-std=c23 $(COMMON_FLAGS)
+
+CXX:=sh4a_nofpueb-elf-g++
+CXX_FLAGS=-std=c++20 $(COMMON_FLAGS)
+
+LD:=sh4a_nofpueb-elf-g++
+LD_FLAGS:=$(FUNCTION_FLAGS) -Wl,--gc-sections
+LIBS:=-L$(SDK_DIR) -lsdk
+
+READELF:=sh4a_nofpueb-elf-readelf
+OBJCOPY:=sh4a_nofpueb-elf-objcopy
+STRIP:=sh4a_nofpueb-elf-strip
+
+APP_ELF := $(OUTDIR)/Doodlepad.elf
+APP_HH3 := $(APP_ELF:.elf=.hh3)
 
 AS_SOURCES:=$(shell find $(SOURCEDIR) -name '*.S')
 CC_SOURCES:=$(shell find $(SOURCEDIR) -name '*.c')
@@ -36,47 +39,48 @@ OBJECTS := $(addprefix $(BUILDDIR)/,$(AS_SOURCES:.S=.o)) \
 	$(addprefix $(BUILDDIR)/,$(CC_SOURCES:.c=.o)) \
 	$(addprefix $(BUILDDIR)/,$(CXX_SOURCES:.cpp=.o))
 
-APP_ELF:=$(OUTDIR)/$(APP_NAME).elf
-APP_BIN:=$(OUTDIR)/$(APP_NAME).bin
+NOLTOOBJS := $(foreach obj, $(OBJECTS), $(if $(findstring /nolto/, $(obj)), $(obj)))
 
-bin: $(APP_BIN) Makefile
+DEPFILES := $(OBJECTS:$(BUILDDIR)/%.o=$(DEPDIR)/%.d)
 
-hhk: $(APP_ELF) Makefile
+hh3: $(APP_HH3) Makefile
+elf: $(APP_ELF) Makefile
 
-all: $(APP_ELF) $(APP_BIN) Makefile
+all: elf hh3
+.DEFAULT_GOAL := all
+.SECONDARY: # Prevents intermediate files from being deleted
 
+.NOTPARALLEL: clean
 clean:
-	rm -rf $(BUILDDIR) $(OUTDIR)
+	rm -rf $(BUILDDIR) $(OUTDIR) $(DEPDIR)
 
-$(APP_BIN): $(APP_ELF)
-	$(OBJCOPY) --output-target=binary $(APP_ELF) $@
+%.hh3: %.elf
+	$(STRIP) -o $@ $^
 
-$(APP_ELF): $(OBJECTS) $(SDK_DIR)/sdk.o linker.ld
-	mkdir -p $(dir $@)
-	$(LD) -T linker.ld -Wl,-Map $@.map -o $@ $(LD_FLAGS) $(OBJECTS) -L$(SDK_DIR) -lsdk
+$(APP_ELF): $(OBJECTS)
+	@mkdir -p $(dir $@)
+	$(LD) -Wl,-Map $@.map -o $@ $(LD_FLAGS) $^ $(LIBS)
 
-# We're not actually building sdk.o, just telling the user they need to do it
-# themselves. Just using the target to trigger an error when the file is
-# required but does not exist.
-$(SDK_DIR)/libsdk.a:
-	$(error You need to build the SDK before using it. Run make in the SDK directory, and check the README.md in the SDK directory for more information)
+$(NOLTOOBJS): FUNCTION_FLAGS+=-fno-lto
 
 $(BUILDDIR)/%.o: %.S
-	mkdir -p $(dir $@)
+	@mkdir -p $(dir $@)
 	$(AS) -c $< -o $@ $(AS_FLAGS)
 
 $(BUILDDIR)/%.o: %.c
-	mkdir -p $(dir $@)
-	$(CC) -c $< -o $@ $(CC_FLAGS)
+	@mkdir -p $(dir $@)
+	@mkdir -p $(dir $(DEPDIR)/$<)
+	+$(CC) -c $< -o $@ $(CC_FLAGS) $(DEPFLAGS)
 
-# Break the build if global constructors are present:
-# Read the sections from the object file (with readelf -S) and look for any
-# called .ctors - if they exist, give the user an error message, delete the
-# object file (so that on subsequent runs of make the build will still fail)
-# and exit with an error code to halt the build.
 $(BUILDDIR)/%.o: %.cpp
-	mkdir -p $(dir $@)
-	$(CXX) -c $< -o $@ $(CXX_FLAGS)
-	@$(READELF) $@ -S | grep ".ctors" > /dev/null && echo "ERROR: Global constructors aren't supported." && rm $@ && exit 1 || exit 0
+	@mkdir -p $(dir $@)
+	@mkdir -p $(dir $(DEPDIR)/$<)
+	+$(CXX) -c $< -o $@ $(CXX_FLAGS) $(DEPFLAGS)
 
-.PHONY: bin hhk all clean
+compile_commands.json:
+	$(MAKE) $(MAKEFLAGS) clean
+	bear -- sh -c "$(MAKE) $(MAKEFLAGS) --keep-going all || exit 0"
+
+.PHONY: elf hh3 all clean compile_commands.json
+
+-include $(DEPFILES)
