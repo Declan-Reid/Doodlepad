@@ -1,9 +1,5 @@
-# Compiled files
-*.o
-*.hhk
-*.bin
-dist
-
-# some temporary files under wsl
-*~
-.*~
+dist/
+obj/
+.cache/
+.deps/
+compile_commands.json
