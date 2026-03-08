@@ -79,14 +79,17 @@ void drawHud(bool show_pen_thickness) {
 void drawHud() { drawHud(false); }
 
 int main() {
-  LCD_GetSize(&screen_width, &screen_height);
+  struct __attribute__((aligned(4))) Input_Event event;
+  unsigned int screen_width_u, screen_height_u;
+  LCD_GetSize(&screen_width_u, &screen_height_u);
+  screen_width = screen_width_u;
+  screen_height = screen_height_u;
 
   LCD_ClearScreen();
   drawHud();
 
   LCD_Refresh();
 
-  struct __attribute__((aligned(4))) Input_Event event;
   int old_p1_x, old_p1_y;
 
   old_p1_x = 0;
@@ -97,11 +100,11 @@ int main() {
       continue;
     }
 
-    if (event.type == EVENT_KEY && event.data.key.pressed) {
-      if (event.data.key.keycode == KEYCODE_POWER_CLEAR) {
+    if (event.type == EVENT_KEY && event.data.key.direction == KEY_PRESSED) {
+      if (event.data.key.keyCode == KEYCODE_POWER_CLEAR) {
         break;
       }
-      if (event.data.key.keycode == KEYCODE_BACKSPACE) {
+      if (event.data.key.keyCode == KEYCODE_BACKSPACE) {
         LCD_ClearScreen();
         drawHud();
         LCD_Refresh();
@@ -168,6 +171,8 @@ int main() {
       }
 
       LCD_Refresh();
+      break;
+    default:
       break;
     }
   }
