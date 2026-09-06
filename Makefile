@@ -32,12 +32,10 @@ STRIP:=sh4a_nofpueb-elf-strip
 APP_ELF := $(OUTDIR)/Doodlepad.elf
 APP_HH3 := $(APP_ELF:.elf=.hh3)
 
-AS_SOURCES:=$(shell find $(SOURCEDIR) -name '*.S')
-CC_SOURCES:=$(shell find $(SOURCEDIR) -name '*.c')
-CXX_SOURCES:=$(shell find $(SOURCEDIR) -name '*.cpp')
-OBJECTS := $(addprefix $(BUILDDIR)/,$(AS_SOURCES:.S=.o)) \
-	$(addprefix $(BUILDDIR)/,$(CC_SOURCES:.c=.o)) \
-	$(addprefix $(BUILDDIR)/,$(CXX_SOURCES:.cpp=.o))
+AS_SOURCES:=$(wildcard *.S)
+CC_SOURCES:=$(wildcard *.c)
+CXX_SOURCES:=$(wildcard *.cpp)
+OBJECTS:=$(AS_SOURCES:.S=.o) $(CC_SOURCES:.c=.o) $(CXX_SOURCES:.cpp=.o)
 
 NOLTOOBJS := $(foreach obj, $(OBJECTS), $(if $(findstring /nolto/, $(obj)), $(obj)))
 
