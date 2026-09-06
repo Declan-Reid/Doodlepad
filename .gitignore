@@ -1,8 +1,5 @@
-*.bin
-*.elf
-*.hh3
-*.map
-
-# temporary files under WSL
-*~
-.*~
+dist/
+obj/
+.cache/
+.deps/
+compile_commands.json
